@@ -1,0 +1,149 @@
+/index.html  
+/style.css  
+/app.js  
+/README.md
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgendaPro+</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h1>AgendaPro+</h1>
+        <nav>
+            <button onclick="showTab('agenda')">Agenda</button>
+            <button onclick="showTab('novo')">Criar Agendamento</button>
+            <button onclick="showTab('pagamentos')">Pagamentos</button>
+        </nav>
+    </header>
+
+    <!-- ABA: AGENDA -->
+    <section id="agenda" class="tab visible">
+        <h2>Agendamentos de Hoje</h2>
+        <div id="listaAgendamentos"></div>
+    </section>
+
+    <!-- ABA: NOVO -->
+    <section id="novo" class="tab">
+        <h2>Novo Agendamento</h2>
+
+        <form id="formAgendamento">
+            <input type="time" id="horario" required>
+            <input type="date" id="data" required>
+            <input type="text" id="cliente" placeholder="Cliente">
+            <input type="text" id="servico" placeholder="Serviço">
+            <input type="number" id="valor" placeholder="Valor" required>
+            <select id="pagamento">
+                <option>Pix</option>
+                <option>Dinheiro</option>
+                <option>Cartão</option>
+            </select>
+
+            <button type="submit">Salvar</button>
+        </form>
+    </section>
+
+    <!-- ABA: PAGAMENTOS -->
+    <section id="pagamentos" class="tab">
+        <h2>Pagamentos</h2>
+        <div id="totalDia">Total do dia: R$ 0,00</div>
+    </section>
+
+    <script src="app.js"></script>
+</body>
+</html>
+body {
+    font-family: Arial;
+    margin: 0;
+    background: #f5f5f5;
+}
+header {
+    background: #111;
+    color: white;
+    padding: 15px;
+}
+nav button {
+    margin: 5px;
+    padding: 10px;
+}
+.tab {
+    display: none;
+    padding: 20px;
+}
+.tab.visible {
+    display: block;
+}
+.card {
+    background: white;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 8px;
+}
+button.share {
+    background: green;
+    color: white;
+    padding: 5px;
+}
+function showTab(tab) {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("visible"));
+    document.getElementById(tab).classList.add("visible");
+}
+
+let agendamentos = JSON.parse(localStorage.getItem("agendamentos")) || [];
+
+document.getElementById("formAgendamento").addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    let novo = {
+        horario: horario.value,
+        data: data.value,
+        cliente: cliente.value,
+        servico: servico.value,
+        valor: Number(valor.value),
+        pagamento: pagamento.value
+    };
+
+    agendamentos.push(novo);
+    localStorage.setItem("agendamentos", JSON.stringify(agendamentos));
+
+    alert("Agendamento salvo!");
+    this.reset();
+});
+
+function atualizarLista() {
+    let hoje = new Date().toISOString().split("T")[0];
+
+    let lista = agendamentos.filter(a => a.data === hoje);
+
+    document.getElementById("listaAgendamentos").innerHTML =
+        lista.map(a => `
+        <div class="card">
+            <b>${a.horario}</b> - ${a.cliente}<br>
+            ${a.servico}<br>
+            R$ ${a.valor.toFixed(2)}<br>
+            <button class="share" onclick="shareWhatsApp('${a.cliente}', '${a.data}', '${a.horario}', '${a.servico}', '${a.valor}')">WhatsApp</button>
+        </div>
+    `).join("");
+
+    let total = lista.reduce((t, a) => t + a.valor, 0);
+
+    document.getElementById("totalDia").innerHTML =
+        `Total do dia: R$ ${total.toFixed(2)}`;
+}
+
+function shareWhatsApp(cliente, data, hora, servico, valor) {
+    let texto = `Olá ${cliente}, aqui está seu agendamento:
+📅 ${data}
+⏰ ${hora}
+💈 Serviço: ${servico}
+💰 Valor: R$ ${valor}`;
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`);
+}
+
+setInterval(atualizarLista, 500);
+add index
