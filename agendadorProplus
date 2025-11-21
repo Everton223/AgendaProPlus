@@ -3,3 +3,391 @@
 /app.js  
 /README.md
 add index
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AgendaPro+</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>AgendaPro+</h1>
+    <nav>
+      <button id="tabAgendaBtn">Agenda</button>
+      <button id="tabNovoBtn">Criar Agendamento</button>
+      <button id="tabPagBtn">Pagamentos</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- AGENDA -->
+    <section id="agendaTab" class="tab visible">
+      <div class="controls">
+        <label>Ver data:
+          <input type="date" id="filtroData" />
+        </label>
+        <button id="hojeBtn">Hoje</button>
+        <button id="exportCsvBtn">Exportar CSV</button>
+      </div>
+
+      <h2>Agendamentos</h2>
+      <div id="listaAgendamentos"></div>
+    </section>
+
+    <!-- NOVO/EDIT -->
+    <section id="novoTab" class="tab">
+      <h2 id="formTitle">Criar Agendamento</h2>
+      <form id="formAgendamento">
+        <div class="row">
+          <label>Horário <input type="time" id="horario" required /></label>
+          <label>Data <input type="date" id="data" required /></label>
+        </div>
+        <label>Cliente <input type="text" id="cliente" placeholder="Nome do cliente" required /></label>
+        <label>Serviço <input type="text" id="servico" placeholder="Descrição do serviço" /></label>
+        <div class="row">
+          <label>Valor (R$) <input type="number" id="valor" step="0.01" min="0" required /></label>
+          <label>Método pagamento
+            <select id="pagamento">
+              <option>Pix</option>
+              <option>Dinheiro</option>
+              <option>Cartão</option>
+            </select>
+          </label>
+        </div>
+
+        <input type="hidden" id="editingIndex" value="-1" />
+        <div class="form-actions">
+          <button type="submit" id="salvarBtn">Salvar</button>
+          <button type="button" id="cancelEditBtn" class="secondary">Cancelar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- PAGAMENTOS -->
+    <section id="pagTab" class="tab">
+      <h2>Pagamentos & Totais</h2>
+      <div class="totals">
+        <div>Total do dia: <strong id="totalDia">R$ 0,00</strong></div>
+        <div>Total últimos 7 dias: <strong id="totalSemana">R$ 0,00</strong></div>
+        <div>Total do mês: <strong id="totalMes">R$ 0,00</strong></div>
+      </div>
+
+      <h3>Filtrar por status</h3>
+      <div class="controls">
+        <button id="filtrarTodos">Todos</button>
+        <button id="filtrarPagos">Pagos</button>
+        <button id="filtrarPendentes">Pendentes</button>
+      </div>
+
+      <div id="listaPagamentos"></div>
+    </section>
+  </main>
+
+  <footer>
+    <small>AgendaPro+ • Salvo no localStorage do navegador</small>
+  </footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>
+:root{
+  --bg:#f4f6f8; --card:#fff; --accent:#1464f4; --muted:#666;
+}
+*{box-sizing:border-box}
+body{font-family:Inter,Arial,Helvetica,sans-serif;margin:0;background:var(--bg);color:#222;}
+.topbar{background:#0f1724;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;}
+.topbar h1{margin:0;font-size:20px}
+.topbar nav button{margin-left:8px;padding:8px 10px;border-radius:6px;border:none;background:#1f2937;color:#fff;cursor:pointer}
+main{max-width:980px;margin:20px auto;padding:0 12px}
+.tab{display:none}
+.tab.visible{display:block}
+.controls{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.row{display:flex;gap:8px}
+input,select,button{font:inherit}
+input[type="text"],input[type="date"],input[type="time"],input[type="number"],select{
+  padding:8px;border:1px solid #d1d5db;border-radius:6px;background:#fff
+}
+button{padding:8px 10px;border-radius:6px;border:1px solid transparent;cursor:pointer}
+button.secondary{background:transparent;border:1px solid #cbd5e1}
+.card{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 1px 3px rgba(15,23,42,0.06);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.card .info{max-width:70%}
+.meta{color:var(--muted);font-size:13px;margin-top:6px}
+.action-group button{margin-left:6px}
+.totals{display:flex;gap:20px;background:var(--card);padding:12px;border-radius:8px;margin-bottom:12px}
+footer{max-width:980px;margin:12px auto;text-align:center;color:var(--muted);font-size:13px}
+@media(max-width:700px){
+  .row{flex-direction:column}
+  .controls{flex-direction:column;align-items:flex-start}
+  .totals{flex-direction:column}
+}
+/* AgendaPro+ - app.js
+   Guarda em localStorage como "agendaProPlus.agendamentos"
+*/
+
+const STORAGE_KEY = "agendaProPlus.agendamentos";
+
+let agendamentos = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+
+const $ = id => document.getElementById(id);
+
+// Tabs
+const agendaTab = $("agendaTab"), novoTab = $("novoTab"), pagTab = $("pagTab");
+const tabAgendaBtn = $("tabAgendaBtn"), tabNovoBtn = $("tabNovoBtn"), tabPagBtn = $("tabPagBtn");
+
+function showTab(tabEl){
+  [agendaTab, novoTab, pagTab].forEach(t=>t.classList.remove("visible"));
+  tabEl.classList.add("visible");
+}
+tabAgendaBtn.onclick = ()=> { showTab(agendaTab); renderAgenda(); }
+tabNovoBtn.onclick = ()=> { showTab(novoTab); resetForm(); }
+tabPagBtn.onclick = ()=> { showTab(pagTab); renderPagamentos(); }
+
+
+// Form refs
+const form = $("formAgendamento");
+const horario = $("horario"), dataInput = $("data"), cliente = $("cliente"),
+      servico = $("servico"), valor = $("valor"), pagamento = $("pagamento"),
+      editingIndex = $("editingIndex"), formTitle = $("formTitle"), cancelEditBtn = $("cancelEditBtn");
+
+// Agenda refs
+const listaAgendamentos = $("listaAgendamentos"), filtroData = $("filtroData"), hojeBtn = $("hojeBtn"), exportCsvBtn = $("exportCsvBtn");
+
+// Pagamentos refs
+const totalDiaEl = $("totalDia"), totalSemanaEl = $("totalSemana"), totalMesEl = $("totalMes"),
+      listaPagamentos = $("listaPagamentos"), filtrarTodos = $("filtrarTodos"),
+      filtrarPagos = $("filtrarPagos"), filtrarPendentes = $("filtrarPendentes");
+
+// Util
+function salvarStorage(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(agendamentos)); }
+function formatMoney(n){ return "R$ " + Number(n).toFixed(2).replace(".", ","); }
+
+// Add / Edit
+form.addEventListener("submit", (e)=>{
+  e.preventDefault();
+  const item = {
+    horario: horario.value,
+    data: dataInput.value,
+    cliente: cliente.value.trim(),
+    servico: servico.value.trim(),
+    valor: Number(parseFloat(valor.value || 0)),
+    pagamento: pagamento.value,
+    pago: false,
+    criadoEm: new Date().toISOString()
+  };
+
+  const idx = Number(editingIndex.value);
+  if(idx >= 0){
+    // manter 'pago' se já existia
+    item.pago = agendamentos[idx].pago || false;
+    agendamentos[idx] = item;
+    editingIndex.value = "-1";
+  } else {
+    agendamentos.push(item);
+  }
+  salvarStorage();
+  resetForm();
+  showTab(agendaTab);
+  renderAgenda();
+});
+
+cancelEditBtn.addEventListener("click", ()=>{
+  resetForm();
+  showTab(agendaTab);
+});
+
+function resetForm(){
+  formTitle.textContent = "Criar Agendamento";
+  form.reset();
+  editingIndex.value = "-1";
+}
+
+// Render Agenda
+function renderAgenda(){
+  const filtro = filtroData.value || (new Date().toISOString().split("T")[0]);
+  const lista = agendamentos
+    .slice()
+    .filter(a=>a.data === filtro)
+    .sort((a,b)=> a.horario.localeCompare(b.horario));
+
+  if(lista.length === 0){
+    listaAgendamentos.innerHTML = `<div class="card"><div class="info">Nenhum agendamento para <strong>${filtro}</strong></div></div>`;
+    atualizarTotais();
+    return;
+  }
+
+  listaAgendamentos.innerHTML = lista.map((a, i)=> {
+    // index local: find global index to support editing/deleting correctly
+    const globalIndex = agendamentos.findIndex(x => x.criadoEm === a.criadoEm && x.data === a.data && x.horario === a.horario && x.cliente === a.cliente);
+    return `
+      <div class="card">
+        <div class="info">
+          <div><strong>${a.horario}</strong> — ${escapeHtml(a.cliente)}</div>
+          <div class="meta">${escapeHtml(a.servico)} • ${formatMoney(a.valor)} • ${a.pagamento} • ${a.pago ? "Pago" : "Pendente"}</div>
+        </div>
+        <div class="action-group">
+          <button onclick="compartilharWhatsApp(${globalIndex})">WhatsApp</button>
+          <button onclick="editarAgendamento(${globalIndex})">Editar</button>
+          <button onclick="togglePago(${globalIndex})">${a.pago ? "Marcar não pago" : "Marcar pago"}</button>
+          <button onclick="excluirAgendamento(${globalIndex})" class="secondary">Excluir</button>
+        </div>
+      </div>`;
+  }).join("");
+  atualizarTotais();
+}
+
+// Escape simples para prevenir injeção ao renderizar
+function escapeHtml(s){
+  return (s+"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+}
+
+// Edit / Delete / Toggle
+window.editarAgendamento = function(index){
+  const a = agendamentos[index];
+  if(!a) return alert("Agendamento não encontrado.");
+  horario.value = a.horario;
+  dataInput.value = a.data;
+  cliente.value = a.cliente;
+  servico.value = a.servico;
+  valor.value = a.valor;
+  pagamento.value = a.pagamento;
+  editingIndex.value = String(index);
+  formTitle.textContent = "Editar Agendamento";
+  showTab(novoTab);
+};
+
+window.excluirAgendamento = function(index){
+  if(!confirm("Excluir este agendamento?")) return;
+  agendamentos.splice(index,1);
+  salvarStorage();
+  renderAgenda();
+  renderPagamentos();
+};
+
+window.togglePago = function(index){
+  agendamentos[index].pago = !agendamentos[index].pago;
+  salvarStorage();
+  renderAgenda();
+  renderPagamentos();
+};
+
+// Compartilhar WhatsApp
+window.compartilharWhatsApp = function(index){
+  const a = agendamentos[index];
+  if(!a) return;
+  const texto = `Olá ${a.cliente}, aqui está seu agendamento:
+📅 ${a.data}
+⏰ ${a.horario}
+💈 ${a.servico}
+💰 ${formatMoney(a.valor)}
+💳 Pagamento: ${a.pagamento}
+*AgendaPro+*`;
+  const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+  window.open(url, "_blank");
+};
+
+// Filtrar data / hoje
+filtroData.addEventListener("change", renderAgenda);
+hojeBtn.addEventListener("click", ()=>{
+  filtroData.value = new Date().toISOString().split("T")[0];
+  renderAgenda();
+});
+
+// Totais (dia / semana / mês)
+function atualizarTotais(){
+  const hoje = filtroData.value || new Date().toISOString().split("T")[0];
+  const totalDia = agendamentos.filter(a=>a.data === hoje).reduce((s,a)=> s + Number(a.valor||0), 0);
+
+  // últimos 7 dias (inclui hoje)
+  const hojeDt = new Date(hoje + "T00:00:00");
+  const ultimaSemana = agendamentos.filter(a=>{
+    const d = new Date(a.data + "T00:00:00");
+    const diff = (hojeDt - d) / (1000*60*60*24);
+    return diff >= 0 && diff < 7;
+  }).reduce((s,a)=> s + Number(a.valor||0), 0);
+
+  // mesmo mês/ano
+  const anoMes = hoje.split("-").slice(0,2).join("-");
+  const totalMes = agendamentos.filter(a=> a.data.startsWith(anoMes)).reduce((s,a)=> s + Number(a.valor||0), 0);
+
+  totalDiaEl.textContent = formatMoney(totalDia);
+  totalSemanaEl.textContent = formatMoney(ultimaSemana);
+  totalMesEl.textContent = formatMoney(totalMes);
+}
+
+// Pagamentos tab render
+let filtroStatus = "todos";
+filtrarTodos.onclick = ()=> { filtroStatus="todos"; renderPagamentos(); };
+filtrarPagos.onclick = ()=> { filtroStatus="pagos"; renderPagamentos(); };
+filtrarPendentes.onclick = ()=> { filtroStatus="pendentes"; renderPagamentos(); };
+
+function renderPagamentos(){
+  const lista = agendamentos.slice().reverse().filter(a=>{
+    if(filtroStatus==="pagos") return a.pago;
+    if(filtroStatus==="pendentes") return !a.pago;
+    return true;
+  });
+
+  if(lista.length === 0){
+    listaPagamentos.innerHTML = `<div class="card"><div class="info">Nenhum resultado</div></div>`;
+    atualizarTotais();
+    return;
+  }
+
+  listaPagamentos.innerHTML = lista.map((a, i)=>{
+    const idx = agendamentos.findIndex(x => x.criadoEm === a.criadoEm);
+    return `
+      <div class="card">
+        <div class="info">
+          <div><strong>${a.data} ${a.horario}</strong> — ${escapeHtml(a.cliente)}</div>
+          <div class="meta">${escapeHtml(a.servico)} • ${formatMoney(a.valor)} • ${a.pagamento} • ${a.pago ? "Pago" : "Pendente"}</div>
+        </div>
+        <div class="action-group">
+          <button onclick="togglePago(${idx})">${a.pago ? "Desmarcar" : "Marcar pago"}</button>
+          <button onclick="compartilharWhatsApp(${idx})">WhatsApp</button>
+          <button onclick="editarAgendamento(${idx})">Editar</button>
+        </div>
+      </div>`;
+  }).join("");
+  atualizarTotais();
+}
+
+// Export CSV
+exportCsvBtn.addEventListener("click", ()=>{
+  if(!confirm("Exportar todos os agendamentos para CSV?")) return;
+  const csv = toCSV(agendamentos);
+  const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "agendamentos.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+function toCSV(items){
+  const header = ["data","horario","cliente","servico","valor","pagamento","pago","criadoEm"];
+  const rows = [header.join(",")];
+  for(const it of items){
+    const row = [
+      it.data, it.horario,
+      `"${(it.cliente||"").replace(/"/g,'""')}"`,
+      `"${(it.servico||"").replace(/"/g,'""')}"`,
+      Number(it.valor||0).toFixed(2),
+      it.pagamento,
+      it.pago ? "SIM" : "NAO",
+      it.criadoEm
+    ];
+    rows.push(row.join(","));
+  }
+  return rows.join("\n");
+}
+
+// Inicializar
+(function init(){
+  // set filtro data para hoje por padrão
+  filtroData.value = new Date().toISOString().split("T")[0];
+  showTab(agendaTab);
+  renderAgenda();
+})();
